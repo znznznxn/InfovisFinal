@@ -581,10 +581,15 @@
 
       const labelSet = Array.from(new Set(parsedData.map(d => d.label === "BENIGN" ? "BENIGN" : "ATTACK")));
       const colorMap = {};
-      const colors = [ "green", randomColor() ];;
+      const colorsOn = [ "green", randomColor()];
+      const colorsOff = [ "green", "green" ];
 
       labelSet.forEach((label, i) => {
-        colorMap[label] = colors[i % colors.length];
+        if (colorOn) {
+          colorMap[label] = colorsOn[i % colorsOn.length];
+        } else {
+          colorMap[label] = colorsOff[i % colorsOff.length];
+        }
       });
 
       if (!colorOn) {
@@ -612,7 +617,7 @@
         lineGroup.append("path")
           .datum(attackData)
           .attr("fill", "none")
-          .attr("stroke", colors[1])  // 또는 다른 colorMap["ATTACK"]
+          .attr("stroke", colors[1])
           .attr("stroke-width", 2)
           .attr("stroke-linejoin", "round")
           .attr("stroke-linecap", "round")
