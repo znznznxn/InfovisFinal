@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+  <title>InfoVis Interface</title>
+  <!-- AI-generated CSS -->
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      font-family: sans-serif;
+    }
+
+    
+    .sidebar {
+      width: 240px;
+      background-color: #2c2f36;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    .sidebar .logo {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 40px;
+    }
+
+    .sidebar .nav-icon {
+      width: 40px;
+      height: 40px;
+      margin: 16px 0;
+      background-color: #444;
+      border-radius: 10px;
+    }
+
+    .sidebar .section {
+      margin-top: 40px;
+    }
+
+    .sidebar .section h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .sidebar .section label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .sidebar input[type="range"] {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .sidebar select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      color: #333;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      height: 60px;
+      background-color: white;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .dashboard {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .panel {
+      background-color: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel .title {
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .chart-area {
+      flex: 1;
+      background-color: #f0f0f0;
+      border: 1px dashed #ccc;
+    }
+  </style>
+  <script>
+    let collectedData;
+
+    // Function to easily draw a chart according to the selected feature
+    const chartMapping = {
+      // for top area
+      avg_flow_duration: {
+        chart: drawBarChart,
+        args: { group: "label", value: "flowDuration" },
+        title: "Avg Flow Duration by Attack Type"
+      },
+      packet_count: {
+        chart: drawBarChart,
+        args: { group: "label", value: "fwdPackets" },
+        title: "Fwd Packet Count by Attack Type"
+      },
+      // for bottom left area
+      line_variance: {
+        chart: drawLineChart,
+        args: { y: "fwdPktStd" },
+        title: "Fwd Packet Length Std Over Time"
+      },
+      meanVsSegment: {
+        chart: drawScatterPlot,
+        args: { x: "fwdPktMean", y: "avgFwdSegmentSize" },
+        title: "Mean vs Segment Size"
+      },
+      // for bottom right area
+      unsupervisedCluster: {
+        chart: drawColoredScatter,
+        args: { x: "flowDuration", y: "totalLength" },
+        title: "Unsupervised Flow Clusters"
+      },
+      varianceByLabel: {
+        chart: drawBoxPlot,
+        args: { group: "label", value: "fwdPktStd" },
+        title: "Variance of Fwd Packet by Attack Type",
+      }
+    };
+
+    function drawBarChart(svg, data, args) {
+      const { group, value, colorOn } = args;
+      const clampMax = 10000;
+
+      const aggregatedData = d3.rollups(
+        data,
+        v => {
+          if (value == "flowDuration") {
+            return d3.mean(v, d => d[value])
+          } else if (value == "fwdPackets") {
+            return d3.sum(v, d => d[value]);
+          }
+        },
+        d => d[group]
+      );
+
+      const { width, height } = svg.node().getBoundingClientRect();
+      const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+
+      const contentWidth = width - margin.left - margin.right;
+      const contentHeight = height - margin.top - margin.bottom;
+
+      const x = d3.scaleBand()
+        .domain(aggregatedData.map(d => { let newCategory = d[0].split("�").pop().trim();
+          return newCategory;
+        }))
+        .range([0, contentWidth])
+        .padding(0.4);
+
+      let maxY;
+      if (value === "flowDuration") {
+        maxY = d3.max(aggregatedData, d => d[1]);
+      } else if (value === "fwdPackets") {
+        const rawMax = d3.max(aggregatedData, d => isNaN(d[1]) ? 0 : d[1]);
+        maxY = rawMax > clampMax ? clampMax : rawMax;
+      }
+
+      const y = d3.scaleLinear()
+        .domain([0, maxY])
+        .range([contentHeight, 0])
+        .nice();
+
+      svg.select("g").remove();
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      g.append("g")
+        .attr("transform", `translate(0,${contentHeight})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .style("text-anchor", "middle");
+
+      g.append("g")
+        .call(d3.axisLeft(y).ticks(6)
+        .tickFormat(d3.format(",.0f")));
+
+      g.selectAll("rect")
+        .data(aggregatedData)
+        .join("rect")
+        .attr("x", d => { let newCategory = d[0].split("�").pop().trim(); // remove any unwanted characters
+          return x(newCategory);
+        })
+        .attr("y", d => {
+          const val = Math.min(d[1], maxY);
+          return y(val);
+        })
+        .attr("height", d => {
+          const val = Math.min(d[1], maxY);
+          return contentHeight - y(val);
+        })
+        .attr("width", x.bandwidth())
+        .attr("fill", colorOn ? randomColor : "green")
+        .on("mouseover", function (event, d) {
+          const tooltip = d3.select("#tooltip");
+          const label = d[0].split("�").pop().trim();
+          tooltip
+            .style("display", "block")
+            .html(`<strong>${label}</strong><br>Value: ${d3.format(",.0f")(d[1])}`);
+          d3.select(this).attr("fill", "darkorange");
+        })
+        .on("mousemove", function (event) {
+          const tooltip = d3.select("#tooltip");
+          tooltip
+            .style("left", `${event.pageX + 10}px`)
+            .style("top", `${event.pageY - 20}px`);
+        })
+        .on("mouseout", function () {
+          d3.select("#tooltip").style("display", "none");
+          d3.select(this).attr("fill", colorOn ? randomColor() : "green");
+        });
+
+      if (value == "fwdPackets") {
+        const clampedData = aggregatedData.filter(d => d[1] > clampMax);
+
+        g.selectAll("clamp-label")
+          .data(clampedData)
+          .join("text")
+          .attr("x", d => {
+            const newCategory = d[0].split("�").pop().trim();
+            return x(newCategory) + x.bandwidth() / 2;
+          })
+          .attr("y", y(clampMax) - 5)
+          .attr("text-anchor", "middle")
+          .attr("font-size", "14px")
+          .attr("fill", "darkred")
+          .text("⬆");
+      }
+    }
+
+    function drawScatterPlot(svg, data, args) {
+      const sampled = d3.shuffle(data).slice(0, 100000);
+      const { x: xKey, y: yKey, colorOn } = args;
+
+      const { width, height } = svg.node().getBoundingClientRect();
+      const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+      const contentWidth = width - margin.left - margin.right;
+      const contentHeight = height - margin.top - margin.bottom;
+
+      const x = d3.scaleLinear()
+        .domain([0, d3.max(sampled, d => d[xKey])]).nice()
+        .range([0, contentWidth]);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(sampled, d => d[yKey])]).nice()
+        .range([contentHeight, 0]);
+
+      svg.select("g").remove();
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      g.append("g").call(d3.axisLeft(y));
+      g.append("g")
+        .attr("transform", `translate(0,${contentHeight})`)
+        .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format(".2s")));
+
+      g.selectAll("circle")
+        .data(sampled)
+        .join("circle")
+        .attr("cx", d => x(d[xKey]))
+        .attr("cy", d => y(d[yKey]))
+        .attr("r", 4)
+        .attr("fill", colorOn ? randomColor() : "steelblue")
+        .attr("opacity", 0.6);
+    }
+
+    function drawColoredScatter(svg, data, args) {
+      const sampled = d3.shuffle(data).slice(0, 100000);
+
+      const { x: xKey, y: yKey } = args;
+
+      const { width, height } = svg.node().getBoundingClientRect();
+      const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+      const contentWidth = width - margin.left - margin.right;
+      const contentHeight = height - margin.top - margin.bottom;
+
+      // AI-generated code to handle range and extent of x and y axes
+      const xExtent = d3.extent(sampled, d => d[xKey]);
+      const xRange = xExtent[1] - xExtent[0];
+      const xMin = Math.max(0, xExtent[0] - 0.05 * xRange);  // 0보다 작으면 0으로
+      const xMax = xExtent[1] + 0.05 * xRange;
+
+      const x = d3.scaleLinear()
+        .domain([xMin, xMax])
+        .range([0, contentWidth])
+        .nice();
+
+      const yExtent = d3.extent(sampled, d => d[yKey]);
+      const yRange = yExtent[1] - yExtent[0];
+      const yMin = Math.max(0, yExtent[0] - 0.05 * yRange);  // 0 clamp
+      const yMax = yExtent[1] + 0.05 * yRange;
+
+      const y = d3.scaleLinear()
+        .domain([yMin, yMax])
+        .range([contentHeight, 0])
+        .nice();
+
+      const color = d3.scaleOrdinal(d3.schemeSet2)
+        .domain([...new Set(data.map(d => d.label))]);
+
+      svg.select("g").remove();
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+      g.append("g").call(d3.axisLeft(y));
+      g.append("g")
+        .attr("transform", `translate(0,${contentHeight})`)
+        .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format(".2s")));
+
+      g.selectAll("circle")
+        .data(sampled)
+        .join("circle")
+        .attr("cx", d => x(d[xKey]))
+        .attr("cy", d => y(d[yKey]))
+        .attr("r", 4)
+        .attr("fill", d => color(d.label))
+        .attr("opacity", 0.7);
+    }
+
+    function drawBoxPlot(svg, data, args) {
+      const { group, value, colorOn } = args;
+
+      const grouped = d3.rollups(data, v => {
+        const values = v.map(d => d[value]).sort(d3.ascending);
+        const q1 = d3.quantile(values, 0.25);
+        const median = d3.quantile(values, 0.5);
+        const q3 = d3.quantile(values, 0.75);
+        const iqr = q3 - q1;
+        return { q1, median, q3, min: q1 - 1.5 * iqr, max: q3 + 1.5 * iqr };
+      }, d => d[group]);
+
+      const { width, height } = svg.node().getBoundingClientRect();
+      const margin = { top: 20, right: 20, bottom: 50, left: 60 };
+      const contentWidth = width - margin.left - margin.right;
+      const contentHeight = height - margin.top - margin.bottom;
+
+      const x = d3.scaleBand()
+        .domain(grouped.map(d => d[0].split("�").pop().trim()))
+        .range([0, contentWidth])
+        .padding(0.4);
+
+      const y = d3.scaleLinear()
+        .domain([
+          d3.min(grouped, d => d[1].min),
+          d3.max(grouped, d => d[1].max)
+        ])
+        .nice()
+        .range([contentHeight, 0]);
+
+      svg.select("g").remove();
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      
+      g.append("g").call(d3.axisLeft(y));
+      g.append("g")
+        .attr("transform", `translate(0,${contentHeight})`)
+        .call(d3.axisBottom(x))
+        .text();
+
+      const box = g.selectAll(".box")
+        .data(grouped)
+        .join("g")
+        .attr("transform", d => `translate(${x(d[0].split("�").pop().trim())},0)`);
+
+      box.append("line")
+        .attr("y1", d => y(d[1].min))
+        .attr("y2", d => y(d[1].max))
+        .attr("x1", x.bandwidth()/2)
+        .attr("x2", x.bandwidth()/2)
+        .attr("stroke", "black");
+
+      box.append("rect")
+        .attr("y", d => y(d[1].q3))
+        .attr("height", d => y(d[1].q1) - y(d[1].q3))
+        .attr("width", x.bandwidth())
+        .attr("fill", colorOn ? randomColor() : "#ccc");
+
+      box.append("line")
+        .attr("y1", d => y(d[1].median))
+        .attr("y2", d => y(d[1].median))
+        .attr("x1", 0)
+        .attr("x2", x.bandwidth())
+        .attr("stroke", "black");
+    }
+
+    function drawLineChart(svg, data, args) {
+      const { y: yKey, colorOn } = args;
+
+      const parsedData = data
+        .map((d, i) => ({
+          x: i,
+          y: +d[yKey],
+          label: d.label
+        }));
+
+      const { width, height } = svg.node().getBoundingClientRect();
+      const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+      const contentWidth = width - margin.left - margin.right;
+      const contentHeight = height - margin.top - margin.bottom;
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(parsedData, d => d.x))
+        .range([0, contentWidth]);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(parsedData, d => d.y)]).nice()
+        .range([contentHeight, 0]);
+
+      const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+      g.append("g")
+        .attr("transform", `translate(0,${contentHeight})`)
+        .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format(".2s")));
+
+      g.append("g").call(d3.axisLeft(y));
+
+      const line = d3.line()
+        .x(d => x(d.x))
+        .y(d => y(d.y));
+
+      const benignData = parsedData.filter(d => d.label === "BENIGN");
+      const attackData = parsedData.filter(d => d.label !== "BENIGN");
+
+      if (!colorOn) {
+        g.append("path")
+          .datum(parsedData)
+          .attr("fill", "none")
+          .attr("stroke", "green")
+          .attr("stroke-width", 2)
+          .attr("d", line);
+      } else {
+        const attackColor = randomColor();
+
+        if (benignData.length > 0) {
+          g.append("path")
+            .datum(benignData)
+            .attr("fill", "none")
+            .attr("stroke", "green")
+            .attr("stroke-width", 2)
+            .attr("d", line);
+        }
+
+        if (attackData.length > 0) {
+          g.append("path")
+            .datum(attackData)
+            .attr("fill", "none")
+            .attr("stroke", attackColor)
+            .attr("stroke-width", 2)
+            .attr("d", line);
+        }
+      }
+    }
+
+    function renderChart(selectId, svgId) {
+      const feature = document.getElementById(selectId).value;
+      const chartConfig = chartMapping[feature];
+      if (!chartConfig) {
+        console.error(`No chart configuration found for feature: ${feature}`);
+        return;
+      }
+
+      const svg = d3.select(`#${svgId}`);
+      svg.selectAll("*").remove();
+      let idPrefix = selectId.split("-")[0];
+      const title = document.getElementById(`${idPrefix}-title`);
+      title.innerText = chartConfig.title;
+      
+      d3.select(`#${svgId}`).append("text")
+        .attr("x", 10)
+        .attr("y", 20)
+        .attr("font-size", "14px").attr("font-weight", "bold");
+
+
+      // for color option on/off
+      let colorOption = document.querySelector('input[name="element"][value="color"]');
+      const colorOn = colorOption.checked;
+      const newArgs = { ...chartConfig.args, colorOn };
+
+      chartConfig.chart(svg, collectedData, newArgs);
+    }
+
+    function initialize() {
+      document.getElementById("feature1-select").addEventListener("change", update);
+      document.getElementById("feature2-select").addEventListener("change", update);
+      document.getElementById("feature3-select").addEventListener("change", update);
+
+      const container1 = document.getElementById("feature1-chart-svg");
+      const container2 = document.getElementById("feature2-chart-svg");
+      const container3 = document.getElementById("feature3-chart-svg");
+
+      container1.setAttribute("width", "100%");
+      container1.setAttribute("height", "100%");
+      container2.setAttribute("width", "100%");
+      container2.setAttribute("height", "100%");
+      container3.setAttribute("width", "100%");
+      container3.setAttribute("height", "100%");
+
+      let colorOption = document.querySelector('input[name="element"][value="color"]');
+      colorOption.addEventListener("change", () => {
+        update();
+      });
+    }
+
+    function update() {
+      renderChart("feature1-select", "feature1-chart-svg");
+      renderChart("feature2-select", "feature2-chart-svg");
+      renderChart("feature3-select", "feature3-chart-svg");
+    }
+
+    function randomColor() {
+      return `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`
+    }
+
+    d3.csv("res\\Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv")
+      .then(csvData => {
+        const data = csvData.map(d => ({
+          dstPort: d[" Destination Port"],
+          flowDuration: +d[" Flow Duration"],
+          fwdPackets: +d[" Total Fwd Packets"],
+          totalLength: +d["Total Length of Fwd Packets"],
+          fwdPktMean: +d[" Fwd Packet Length Mean"],
+          fwdPktStd: +d[" Fwd Packet Length Std"],
+          avgFwdSegmentSize: +d[" Avg Fwd Segment Size"],
+          label: d[" Label"],
+        }));
+
+        collectedData = data;
+
+        initialize();
+        update();
+      })
+  </script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <img src="res\\Emblem_01.jpg" alt="Logo" class="nav-icon" style="width: 60%; height: auto;">
+    </div>
+    <div class="section">
+      <h3>Features</h3>
+      <select name="feature1" id="feature1-select">
+        <option value="avg_flow_duration">Avg flow duration</option>
+        <option value="packet_count">Fwd Packet Count</option>
+      </select>
+      <select name="feature2" id="feature2-select">
+        <option value="line_variance">Anomalous Packet Volatility Over Time</option>
+        <option value="meanVsSegment">Mean vs Segment</option>
+      </select>
+      <select name="feature3" id="feature3-select">
+        <option value="unsupervisedCluster">Unsupervised Flow Clusters</option>
+        <option value="varianceByLabel">Packet Variance</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <h3>Option</h3>
+      <label><input type="checkbox" name="element" value="color"> Color</label>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header>
+      InfoVis Dashboard
+    </header>
+
+    <section class="dashboard">
+      <div class="panel" style="grid-column: span 2;">
+        <div class="title" id="feature1-title"></div>
+        <div class="chart-area" id="feature1-chart">
+          <svg id="feature1-chart-svg"></svg>
+        </div>
+      </div>
+      <div class="panel" style="grid-column: span 1;">
+        <div class="title" id="feature2-title"></div>
+        <div class="chart-area" id="feature2-chart">
+          <svg id="feature2-chart-svg"></svg>
+        </div>
+      </div>
+      <div class="panel" style="grid-column: span 1;">
+        <div class="title" id="feature3-title"></div>
+        <div class="chart-area" id="feature3-chart">
+          <svg id="feature3-chart-svg"></svg>
+        </div>
+      </div>
+    </section>
+    <div id="tooltip" style="
+      position: absolute;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+    "></div>
+  </div>
+</body>
+</html>
