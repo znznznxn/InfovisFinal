@@ -289,7 +289,7 @@
         .attr("transform", `translate(0,${contentHeight})`)
         .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format(".2s")));
 
-      g.selectAll("circle")
+      const circles = g.selectAll("circle")
         .data(sampled)
         .join("circle")
         .attr("cx", d => x(d[xKey]))
@@ -297,6 +297,37 @@
         .attr("r", 4)
         .attr("fill", colorOn ? randomColor() : "steelblue")
         .attr("opacity", 0.6);
+
+      const brush = d3.brush()
+        .extent([[0, 0], [contentWidth, contentHeight]])
+        .on("end", (event) => {
+          const selection = event.selection;
+          if (!selection) return;
+
+          const [[x0, y0], [x1, y1]] = selection;
+
+          const selected = sampled.filter(d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1;
+          });
+
+          console.log("Selected points:", selected);
+
+          circles.attr("stroke", d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return (x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1) ? "black" : null;
+          }).attr("stroke-width", d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return (x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1) ? 2 : null;
+          });
+        });
+
+      g.append("g")
+        .attr("class", "brush")
+        .call(brush);
     }
 
     function drawColoredScatter(svg, data, args) {
@@ -331,7 +362,7 @@
         .nice();
 
       const color = d3.scaleOrdinal(d3.schemeSet2)
-        .domain([...new Set(data.map(d => d.label))]);
+        .domain([...new Set(data.map(d => d.label.split("�").pop().trim()))]);
 
       svg.select("g").remove();
       const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
@@ -341,14 +372,60 @@
         .attr("transform", `translate(0,${contentHeight})`)
         .call(d3.axisBottom(x).ticks(8).tickFormat(d3.format(".2s")));
 
-      g.selectAll("circle")
+      const circles = g.selectAll("circle")
         .data(sampled)
         .join("circle")
         .attr("cx", d => x(d[xKey]))
         .attr("cy", d => y(d[yKey]))
         .attr("r", 4)
-        .attr("fill", d => color(d.label))
+        .attr("fill", d => color(d.label.split("�").pop().trim()))
         .attr("opacity", 0.7);
+
+      // AI-generated code to create legend
+      const legend = d3.legendColor()
+        .scale(color)
+        .shape("circle")
+        .shapePadding(6)
+        .labelAlign("start")
+        .orient("vertical");
+
+      svg.selectAll(".legend").remove();
+      svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width - 160}, 40)`)
+        .call(legend);
+
+      // AI-generated code to add brush functionality
+      const brush = d3.brush()
+        .extent([[0, 0], [contentWidth, contentHeight]])
+        .on("end", (event) => {
+          const selection = event.selection;
+          if (!selection) return;
+
+          const [[x0, y0], [x1, y1]] = selection;
+
+          const selected = sampled.filter(d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1;
+          });
+
+          console.log("Selected points:", selected);
+
+          circles.attr("stroke", d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return (x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1) ? "black" : null;
+          }).attr("stroke-width", d => {
+            const cx = x(d[xKey]);
+            const cy = y(d[yKey]);
+            return (x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1) ? 2 : null;
+          });
+        });
+
+      g.append("g")
+        .attr("class", "brush")
+        .call(brush);
     }
 
     function drawBoxPlot(svg, data, args) {
@@ -416,8 +493,49 @@
         .attr("stroke", "black");
     }
 
+    function sampleByLabelProportionalShuffled(data, totalSampleSize = 1000) {
+      // 1. label별 전체 개수 계산
+      const labelCounts = {};
+      data.forEach(d => {
+        const label = d.label;
+        labelCounts[label] = (labelCounts[label] || 0) + 1;
+      });
+
+      const total = data.length;
+
+      // 2. label별 샘플 목표 개수 계산
+      const labelSampleTargets = {};
+      Object.keys(labelCounts).forEach(label => {
+        const proportion = labelCounts[label] / total;
+        labelSampleTargets[label] = Math.round(proportion * totalSampleSize);
+      });
+
+      // 3. label별로 해당 index 수집
+      const labelToIndices = {};
+      data.forEach((d, idx) => {
+        const label = d.label;
+        if (!labelToIndices[label]) labelToIndices[label] = [];
+        labelToIndices[label].push(idx);
+      });
+
+      // 4. label별로 목표 개수만큼 index 랜덤 샘플링
+      const sampledIndices = [];
+      Object.entries(labelToIndices).forEach(([label, indices]) => {
+        const shuffled = d3.shuffle([...indices]); // d3.shuffle 사용
+        const count = labelSampleTargets[label];
+        sampledIndices.push(...shuffled.slice(0, count));
+      });
+
+      // 5. 전체 sampled 인덱스를 정렬 (원래 순서 유지)
+      sampledIndices.sort((a, b) => a - b);
+
+      // 6. 결과 데이터 구성
+      const sampled = sampledIndices.map(i => data[i]);
+      return sampled;
+    }
+
     function drawLineChart(svg, data, args) {
-      const { y: yKey, colorOn } = args;
+      const { y: yKey, colorOn } = args; // AI-generated code to sample data
 
       const parsedData = data.map((d, i) => ({
         x: i,
@@ -461,6 +579,14 @@
         .x(d => x(d.x))
         .y(d => y(d.y));
 
+      const labelSet = Array.from(new Set(parsedData.map(d => d.label === "BENIGN" ? "BENIGN" : "ATTACK")));
+      const colorMap = {};
+      const colors = [ "green", randomColor() ];;
+
+      labelSet.forEach((label, i) => {
+        colorMap[label] = colors[i % colors.length];
+      });
+
       if (!colorOn) {
         lineGroup.append("path")
           .datum(parsedData)
@@ -471,35 +597,50 @@
           .attr("stroke-linecap", "round")
           .attr("d", line);
       } else {
-        const segments = [];
-        let currentSegment = [parsedData[0]];
+        const benignData = parsedData.filter(d => d.label === "BENIGN");
+        const attackData = parsedData.filter(d => d.label !== "BENIGN");
 
-        for (let i = 1; i < parsedData.length; i++) {
-          const prev = parsedData[i - 1];
-          const curr = parsedData[i];
+        lineGroup.append("path")
+          .datum(benignData)
+          .attr("fill", "none")
+          .attr("stroke", "green")
+          .attr("stroke-width", 2)
+          .attr("stroke-linejoin", "round")
+          .attr("stroke-linecap", "round")
+          .attr("d", line);
 
-          if (curr.label === prev.label) {
-            currentSegment.push(curr);
-          } else {
-            segments.push({ label: prev.label, data: currentSegment });
-            currentSegment = [prev, curr];
-          }
-        }
-        segments.push({ label: currentSegment[0].label, data: currentSegment });
-        console.log(segments);
-        segments.forEach(segment => {
-          lineGroup.append("path")
-            .datum(segment.data)
-            .attr("fill", "none")
-            .attr("stroke", segment.label === "BENIGN" ? "green" : randomColor())
-            .attr("stroke-width", 2)
-            .attr("d", line);
-        });
+        lineGroup.append("path")
+          .datum(attackData)
+          .attr("fill", "none")
+          .attr("stroke", colors[1])  // 또는 다른 colorMap["ATTACK"]
+          .attr("stroke-width", 2)
+          .attr("stroke-linejoin", "round")
+          .attr("stroke-linecap", "round")
+          .attr("d", line);
       }
+
+      // AI-generated code to create legend
+      const legendScale = d3.scaleOrdinal()
+        .domain(labelSet)
+        .range(labelSet.map(label => colorMap[label]));
+
+      const legend = d3.legendColor()
+        .scale(legendScale)
+        .shape("line")
+        .shapeWidth(30)
+        .shapeHeight(3)
+        .labelAlign("start")
+        .orient("vertical");
+
+      svg.selectAll(".legend").remove();
+      svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width - 160}, 40)`)
+        .call(legend);
 
       // Add zoom functionality with AI-generated code
       const zoom = d3.zoom()
-        .scaleExtent([1, 10])
+        .scaleExtent([10, 200])
         .translateExtent([[0, 0], [width, height]])
         .extent([[0, 0], [width, height]])
         .on("zoom", (event) => {
@@ -544,9 +685,9 @@
     }
 
     function initialize() {
-      document.getElementById("feature1-select").addEventListener("change", update);
-      document.getElementById("feature2-select").addEventListener("change", update);
-      document.getElementById("feature3-select").addEventListener("change", update);
+      document.getElementById("feature1-select").addEventListener("change", () => renderChart("feature1-select", "feature1-chart-svg"));
+      document.getElementById("feature2-select").addEventListener("change", () => renderChart("feature2-select", "feature2-chart-svg"));
+      document.getElementById("feature3-select").addEventListener("change", () => renderChart("feature3-select", "feature3-chart-svg"));
 
       const container1 = document.getElementById("feature1-chart-svg");
       const container2 = document.getElementById("feature2-chart-svg");
