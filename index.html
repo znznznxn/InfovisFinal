@@ -543,7 +543,7 @@
       return `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`
     }
 
-    d3.csv("res\\Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv")
+    d3.csv("https://raw.githubusercontent.com/znznznxn/InfovisFinal/refs/heads/main/res/Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv")
       .then(csvData => {
         const data = csvData.map(d => ({
           dstPort: d[" Destination Port"],
