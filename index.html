@@ -461,8 +461,7 @@
       g.append("g").call(d3.axisLeft(y));
       g.append("g")
         .attr("transform", `translate(0,${contentHeight})`)
-        .call(d3.axisBottom(x))
-        .text();
+        .call(d3.axisBottom(x));
 
       const box = g.selectAll(".box")
         .data(grouped)
