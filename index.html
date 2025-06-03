@@ -427,6 +427,7 @@
     function drawBoxPlot(svg, data, args) {
       const { group, value, colorOn } = args;
 
+      // AI-generated code to handle grouping and quantile calculations
       const grouped = d3.rollups(data, v => {
         const values = v.map(d => d[value]).sort(d3.ascending);
         const q1 = d3.quantile(values, 0.25);
@@ -479,7 +480,7 @@
         .attr("y", d => y(d[1].q3))
         .attr("height", d => y(d[1].q1) - y(d[1].q3))
         .attr("width", x.bandwidth())
-        .attr("fill", colorOn ? randomColor() : "#ccc");
+        .attr("fill", colorOn ? randomColor() : "green");
 
       box.append("line")
         .attr("y1", d => y(d[1].median))
