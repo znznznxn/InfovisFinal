@@ -211,6 +211,7 @@
         .call(d3.axisLeft(y).ticks(6)
         .tickFormat(d3.format(",.0f")));
 
+      // AI-generated code for tooltip
       g.selectAll("rect")
         .data(aggregatedData)
         .join("rect")
@@ -648,9 +649,9 @@
     }
 
     function initialize() {
-      document.getElementById("feature1-select").addEventListener("change", renderChart("feature1-select", "feature1-chart-svg"));
-      document.getElementById("feature2-select").addEventListener("change", renderChart("feature2-select", "feature2-chart-svg"));
-      document.getElementById("feature3-select").addEventListener("change", renderChart("feature3-select", "feature3-chart-svg"));
+      document.getElementById("feature1-select").addEventListener("change", () => renderChart("feature1-select", "feature1-chart-svg"));
+      document.getElementById("feature2-select").addEventListener("change", () => renderChart("feature2-select", "feature2-chart-svg"));
+      document.getElementById("feature3-select").addEventListener("change", () => renderChart("feature3-select", "feature3-chart-svg"));
 
       const container1 = document.getElementById("feature1-chart-svg");
       const container2 = document.getElementById("feature2-chart-svg");
