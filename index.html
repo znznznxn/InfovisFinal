@@ -523,6 +523,8 @@
       const yAxis = g.append("g")
         .call(d3.axisLeft(y));
 
+      // AI-generated code to create clipPath for zooming
+      svg.select("defs").remove();
       const clip = svg.append("defs").append("clipPath")
         .attr("id", "clip")
         .append("rect")
