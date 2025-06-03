@@ -312,8 +312,6 @@
             return x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1;
           });
 
-          console.log("Selected points:", selected);
-
           circles.attr("stroke", d => {
             const cx = x(d[xKey]);
             const cy = y(d[yKey]);
@@ -409,8 +407,6 @@
             const cy = y(d[yKey]);
             return x0 <= cx && cx <= x1 && y0 <= cy && cy <= y1;
           });
-
-          console.log("Selected points:", selected);
 
           circles.attr("stroke", d => {
             const cx = x(d[xKey]);
