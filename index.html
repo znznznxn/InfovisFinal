@@ -138,18 +138,18 @@
         args: { y: "fwdPktStd" },
         title: "Fwd Packet Length Std Over Time"
       },
-      meanVsSegment: {
+      mean_vs_segment: {
         chart: drawScatterPlot,
         args: { x: "fwdPktMean", y: "avgFwdSegmentSize" },
         title: "Mean vs Segment Size"
       },
       // for bottom right area
-      unsupervisedCluster: {
+      unsupervised_cluster: {
         chart: drawColoredScatter,
         args: { x: "flowDuration", y: "totalLength" },
         title: "Unsupervised Flow Clusters"
       },
-      varianceByLabel: {
+      variance_by_label: {
         chart: drawBoxPlot,
         args: { group: "label", value: "fwdPktStd" },
         title: "Variance of Fwd Packet by Attack Type",
@@ -493,6 +493,7 @@
     function drawLineChart(svg, data, args) {
       const { y: yKey, colorOn } = args;
 
+      // there is no timestamp in the data, so I choose index as x-axis
       const parsedData = data.map((d, i) => ({
         x: i,
         y: +d[yKey],
@@ -646,9 +647,9 @@
     }
 
     function initialize() {
-      document.getElementById("feature1-select").addEventListener("change", () => renderChart("feature1-select", "feature1-chart-svg"));
-      document.getElementById("feature2-select").addEventListener("change", () => renderChart("feature2-select", "feature2-chart-svg"));
-      document.getElementById("feature3-select").addEventListener("change", () => renderChart("feature3-select", "feature3-chart-svg"));
+      document.getElementById("feature1-select").addEventListener("change", renderChart("feature1-select", "feature1-chart-svg"));
+      document.getElementById("feature2-select").addEventListener("change", renderChart("feature2-select", "feature2-chart-svg"));
+      document.getElementById("feature3-select").addEventListener("change", renderChart("feature3-select", "feature3-chart-svg"));
 
       const container1 = document.getElementById("feature1-chart-svg");
       const container2 = document.getElementById("feature2-chart-svg");
@@ -712,11 +713,11 @@
       </select>
       <select name="feature2" id="feature2-select">
         <option value="line_variance">Anomalous Packet Volatility Over Time</option>
-        <option value="meanVsSegment">Mean vs Segment</option>
+        <option value="mean_vs_segment">Mean vs Segment</option>
       </select>
       <select name="feature3" id="feature3-select">
-        <option value="unsupervisedCluster">Unsupervised Flow Clusters</option>
-        <option value="varianceByLabel">Packet Variance</option>
+        <option value="unsupervised_cluster">Unsupervised Flow Clusters</option>
+        <option value="variance_by_label">Packet Variance</option>
       </select>
     </div>
 
